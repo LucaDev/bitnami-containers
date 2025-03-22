@@ -27,7 +27,9 @@ trap "nginx_stop" EXIT
 am_i_root && ensure_user_exists "$NGINX_DAEMON_USER" --group "$NGINX_DAEMON_GROUP"
 
 # Configure HTTPS sample block using generated SSL certs
-nginx_generate_sample_certs
+if ! is_boolean_yes "$WORDPRESS_DISABLE_HTTPS"; then
+    nginx_generate_sample_certs
+fi
 
 # Run init scripts
 nginx_custom_init_scripts

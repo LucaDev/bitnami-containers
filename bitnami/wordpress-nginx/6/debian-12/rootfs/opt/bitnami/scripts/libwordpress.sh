@@ -688,6 +688,9 @@ wordpress_generate_web_server_configuration() {
     # Web server config files will be generated twice, in order to properly support WORDPRESS_HTACCESS_OVERRIDE_NONE
     # At build time, htaccess files will not be moved - This will happen at runtime only if WORDPRESS_HTACCESS_OVERRIDE_NONE is enabled
     local -a web_server_config_create_flags
+    if ! is_boolean_yes "$WORDPRESS_DISABLE_HTTPS"; then
+        web_server_config_create_flags+=("--disable-https")
+    fi
     if ! is_boolean_yes "$WORDPRESS_HTACCESS_OVERRIDE_NONE"; then
         # Enable .htaccess files
         web_server_config_create_flags+=("--apache-move-htaccess" "no" "--apache-allow-override" "All")
