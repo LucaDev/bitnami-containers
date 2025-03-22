@@ -1,10 +1,43 @@
 # Copyright Broadcom, Inc. All Rights Reserved.
 # SPDX-License-Identifier: APACHE-2.0
 
+FROM docker.io/bitnami/minideb:bookworm AS builder
+ARG DOWNLOADS_URL="downloads.bitnami.com/files/stacksmith"
+ARG TARGETARCH
+
+ENV HOME="/" \
+  OS_ARCH="${TARGETARCH:-amd64}" \
+  OS_FLAVOUR="debian-12" \
+  OS_NAME="linux"
+
+SHELL ["/bin/bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c"]
+
+RUN install_packages autoconf build-essential curl ca-certificates
+RUN mkdir -p /tmp/bitnami/pkg/cache/ ; cd /tmp/bitnami/pkg/cache/ ; mkdir /opt/bitnami ; \
+  COMPONENTS=( \
+  "php-8.2.27-11-linux-${OS_ARCH}-debian-12" \
+  ) ; \
+  for COMPONENT in "${COMPONENTS[@]}"; do \
+  if [ ! -f "${COMPONENT}.tar.gz" ]; then \
+  curl -SsLf "https://${DOWNLOADS_URL}/${COMPONENT}.tar.gz" -O ; \
+  curl -SsLf "https://${DOWNLOADS_URL}/${COMPONENT}.tar.gz.sha256" -O ; \
+  fi ; \
+  sha256sum -c "${COMPONENT}.tar.gz.sha256" ; \
+  tar -zxf "${COMPONENT}.tar.gz" -C /opt/bitnami --strip-components=2 --no-same-owner --wildcards '*/files' ; \
+  rm -rf "${COMPONENT}".tar.gz{,.sha256} ; \
+  done
+RUN cd / \
+  ; curl -SsLf https://pecl.php.net/get/redis-6.1.0.tgz | tar xzf - ; mv redis-* redis ; cd redis \
+  ; /opt/bitnami/php/bin/phpize \
+  ; ./configure --with-php-config=/opt/bitnami/php/bin/php-config \
+  ; make 
+
 FROM docker.io/bitnami/minideb:bookworm
 
 ARG DOWNLOADS_URL="downloads.bitnami.com/files/stacksmith"
 ARG TARGETARCH
+
+COPY --from=builder /redis/modules/redis.so /opt/bitnami/php/lib/php/extensions/
 
 LABEL com.vmware.cp.artifact.flavor="sha256:c50c90cfd9d12b445b011e6ad529f1ad3daea45c26d20b00732fae3cd71f6a83" \
       org.opencontainers.image.base.name="docker.io/bitnami/minideb:bookworm" \
@@ -56,6 +89,7 @@ RUN /opt/bitnami/scripts/nginx/postunpack.sh
 RUN /opt/bitnami/scripts/php/postunpack.sh
 RUN /opt/bitnami/scripts/nginx-php-fpm/postunpack.sh
 RUN /opt/bitnami/scripts/wordpress/postunpack.sh
+RUN echo "extension=redis.so" >> /opt/bitnami/php/etc/php.ini
 ENV APP_VERSION="6.7.2" \
     BITNAMI_APP_NAME="wordpress-nginx" \
     NGINX_HTTPS_PORT_NUMBER="" \
